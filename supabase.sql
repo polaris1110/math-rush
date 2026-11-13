@@ -301,6 +301,14 @@ language sql stable security definer set search_path = public as $$
    order by rk;
 $$;
 
+-- 도우미 함수의 search_path 고정 (Supabase 보안 권고)
+alter function public.bm_week() set search_path = public;
+alter function public.bm_r(int, int) set search_path = public;
+alter function public.bm_name_problem(text) set search_path = public;
+alter function public.bm_make(text, text) set search_path = public;
+alter function public.bm_round(text) set search_path = public;
+alter function public.bm_valid_player(text) set search_path = public;
+
 -- 4) 권한: 게임에서 부르는 함수만 공개 ----------------------
 revoke execute on all functions in schema public from public, anon, authenticated;
 grant execute on function public.start_round(text, text)               to anon, authenticated;
