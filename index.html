@@ -32,6 +32,14 @@
 
   .nick{display:flex;align-items:center;gap:10px}
   .nick .name{font-family:"Jua";font-size:22px;flex:1}
+  .code{display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);font-size:14px;color:var(--muted);flex-wrap:wrap}
+  .code b{font-family:"Jua";font-size:19px;color:var(--ink);letter-spacing:1px;font-weight:400}
+  .code .sp{flex:1}
+  .btn-small{background:#F6EFE2;padding:6px 10px;border-radius:10px;font-size:13.5px}
+  .restore{display:flex;gap:8px;margin-top:10px}
+  .restore input{flex:1;min-width:0;font-family:"Jua";font-size:18px;letter-spacing:1px;padding:8px 10px;border:2px solid var(--line);border-radius:12px;text-transform:uppercase;background:#fff;color:var(--ink)}
+  .note{font-size:13px;margin-top:8px;color:var(--muted);line-height:1.5}
+  .note.bad{color:var(--bad)} .note.ok{color:var(--ok)}
   .btn-ghost{background:#F6EFE2;padding:9px 12px;border-radius:12px;font-size:15px}
   .btn-ghost:hover{background:#EFE5D3}
 
@@ -125,6 +133,17 @@
         <div class="name" id="nickName"></div>
         <button class="btn-ghost" id="nickRoll">🎲 바꾸기</button>
       </div>
+      <div class="code">
+        <span>내 코드</span><b id="myCode"></b>
+        <button class="btn-small" id="copyCode">복사</button>
+        <span class="sp"></span>
+        <button class="btn-small" id="openRestore">다른 기기에서 이어하기</button>
+      </div>
+      <div class="restore hidden" id="restoreBox">
+        <input id="codeInput" maxlength="13" placeholder="XXXX-XXXX-XXX" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        <button class="btn-ghost" id="codeApply">확인</button>
+      </div>
+      <div class="note" id="codeNote">이 코드를 적어 두면 다른 폰이나 브라우저에서도 같은 사람으로 이어서 할 수 있어요.</div>
     </div>
 
     <div class="card">
@@ -203,9 +222,20 @@ const SUPABASE_KEY = "sb_publishable_5IK46ha7sJofNA0KcAMfvg_P9YY6o0l";   // 예:
   };
   const OPS = {"+":"+", "-":"−", "*":"×", "/":"÷"};
   const $ = id => document.getElementById(id);
+  // localStorage + 쿠키 이중 저장 (앱 속 브라우저 등에서 저장소가 지워지는 경우 대비)
+  const cookie = {
+    get(k){ try{ const m = document.cookie.match(new RegExp("(?:^|; )" + k + "=([^;]*)")); return m ? decodeURIComponent(m[1]) : null; }catch(e){ return null; } },
+    set(k, v){ try{ document.cookie = k + "=" + encodeURIComponent(v) + "; max-age=63072000; path=/; SameSite=Lax"; }catch(e){} }
+  };
   const store = {
-    get(k, d){ try{ const v = localStorage.getItem(k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
-    set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+    get(k, d){
+      let v = null;
+      try{ v = localStorage.getItem(k); }catch(e){}
+      if(v == null) v = cookie.get(k);
+      if(v == null) return d;
+      try{ return JSON.parse(v); }catch(e){ return d; }
+    },
+    set(k, v){ const t = JSON.stringify(v); try{ localStorage.setItem(k, t); }catch(e){} cookie.set(k, t); }
   };
 
   // ---------- 서버 연결 ----------
@@ -272,15 +302,58 @@ const SUPABASE_KEY = "sb_publishable_5IK46ha7sJofNA0KcAMfvg_P9YY6o0l";   // 예:
   // ---------- 닉네임 ----------
   const ADJ = ["빠른","씩씩한","똑똑한","용감한","반짝이는","신나는","날쌘","튼튼한","귀여운","멋진","즐거운","침착한","재빠른","힘찬"];
   const ANI = ["호랑이","토끼","다람쥐","고양이","강아지","펭귄","돌고래","부엉이","여우","판다","코알라","치타","거북이","사자"];
+  // 플레이어 코드: 8자리 ID + 닉네임 3자리 → 예) K7PQ-29XM-B4D
+  const ABC = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";       // 헷갈리는 0/O, 1/I 제외
+  const newPid = () => { let x=""; const a=new Uint32Array(8); crypto.getRandomValues(a); for(const v of a) x += ABC[v % 32]; return x; };
+  const validPid = p => typeof p==="string" && /^[A-HJ-NP-Z2-9]{8}$/.test(p);
+  const validNick = n => n && ADJ[n.a]!=null && ANI[n.n]!=null && Number.isInteger(n.k) && n.k>=1 && n.k<=99;
+  function encodeCode(){
+    let v = (nick.a*ANI.length + nick.n)*99 + (nick.k-1), t = "";
+    for(let i=0;i<3;i++){ t = ABC[v % 32] + t; v = Math.floor(v/32); }
+    return pid.slice(0,4) + "-" + pid.slice(4) + "-" + t;
+  }
+  function decodeCode(str){
+    const c = String(str||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/O/g,"0").replace(/I/g,"1");
+    if(c.length !== 11) return null;
+    const p = c.slice(0,8); if(!validPid(p)) return null;
+    let v = 0;
+    for(const ch of c.slice(8)){ const d = ABC.indexOf(ch); if(d<0) return null; v = v*32 + d; }
+    const k = v % 99 + 1; v = Math.floor(v/99);
+    const n = { a: Math.floor(v/ANI.length), n: v % ANI.length, k };
+    return validNick(n) ? {pid:p, nick:n} : null;
+  }
   let pid = store.get("bm-pid", null);
-  if(!pid){ pid = Date.now().toString(36) + Math.random().toString(36).slice(2,10); store.set("bm-pid", pid); }
+  if(!validPid(pid)){ pid = newPid(); store.set("bm-pid", pid); }
   let nick = store.get("bm-nick", null);
   function rollNick(init){ nick = {a:r(0,ADJ.length-1), n:r(0,ANI.length-1), k:r(1,99)}; store.set("bm-nick", nick); renderNick(); if(!init) loadBoard(); }
   const nickText = () => ADJ[nick.a] + " " + ANI[nick.n] + " " + nick.k;
   const playerKey = () => pid + "-" + nick.a + "-" + nick.n + "-" + nick.k;
-  function renderNick(){ $("nickName").textContent = nickText(); }
-  if(!nick || ADJ[nick.a]==null || ANI[nick.n]==null || !(nick.k>=1 && nick.k<=99)) rollNick(true); else renderNick();
+  function renderNick(){ $("nickName").textContent = nickText(); $("myCode").textContent = encodeCode(); }
+  if(!validNick(nick)) rollNick(true); else renderNick();
   $("nickRoll").onclick = () => rollNick(false);
+
+  // 저장이 실제로 되는지 확인 → 안 되면 코드를 꼭 적어 두라고 안내
+  (function(){
+    let ok = false;
+    try{ localStorage.setItem("bm-test","1"); ok = localStorage.getItem("bm-test")==="1"; }catch(e){}
+    if(!ok){ cookie.set("bm-test","1"); ok = cookie.get("bm-test")==="1"; }
+    if(!ok){ const n=$("codeNote"); n.className="note bad"; n.textContent="이 브라우저는 닉네임을 기억하지 못해요. 크롬이나 사파리로 열거나, 내 코드를 적어 두었다가 '다른 기기에서 이어하기'로 입력하세요."; }
+  })();
+  const setNote = (t, cls) => { const n=$("codeNote"); n.className = "note" + (cls ? " "+cls : ""); n.textContent = t; };
+  $("copyCode").onclick = async () => {
+    try{ await navigator.clipboard.writeText(encodeCode()); setNote("코드를 복사했어요. 메모장이나 카톡 나에게 보내기에 붙여 넣어 두세요.", "ok"); }
+    catch(e){ setNote("복사가 안 돼요. 화면의 코드를 직접 적어 두세요."); }
+  };
+  $("openRestore").onclick = () => { $("restoreBox").classList.toggle("hidden"); $("codeInput").focus(); };
+  const applyCode = () => {
+    const d = decodeCode($("codeInput").value);
+    if(!d){ setNote("코드가 올바르지 않아요. 다시 확인해 주세요.", "bad"); return; }
+    pid = d.pid; nick = d.nick; store.set("bm-pid", pid); store.set("bm-nick", nick);
+    renderNick(); $("restoreBox").classList.add("hidden"); $("codeInput").value = "";
+    setNote("'" + nickText() + "'(으)로 이어서 할게요!", "ok"); loadBoard();
+  };
+  $("codeApply").onclick = applyCode;
+  $("codeInput").addEventListener("keydown", e => { if(e.key==="Enter") applyCode(); });
 
   // ---------- 난이도 ----------
   let level = store.get("bm-level", "normal"); if(!LEVELS[level]) level = "normal";
