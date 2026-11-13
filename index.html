@@ -128,11 +128,17 @@
     </div>
 
     <div class="card">
-      <div class="label">내 닉네임</div>
-      <div class="nick">
+      <div class="label">내 이름</div>
+      <div class="nick" id="nickView">
         <div class="name" id="nickName"></div>
-        <button class="btn-ghost" id="nickRoll">🎲 바꾸기</button>
+        <button class="btn-ghost" id="nickEdit">✏️ 바꾸기</button>
       </div>
+      <div class="restore hidden" id="nickBox" style="margin-top:0">
+        <input id="nickInput" maxlength="10" placeholder="이름을 써 주세요" autocomplete="off" spellcheck="false">
+        <button class="btn-ghost" id="nickSave">확인</button>
+        <button class="btn-small hidden" id="nickCancel">취소</button>
+      </div>
+      <div class="note" id="nickNote">한글, 영문, 숫자로 2~10자 (띄어쓰기·특수문자는 안 돼요)</div>
       <div class="code">
         <span>내 코드</span><b id="myCode"></b>
         <button class="btn-small" id="copyCode">복사</button>
@@ -140,7 +146,7 @@
         <button class="btn-small" id="openRestore">다른 기기에서 이어하기</button>
       </div>
       <div class="restore hidden" id="restoreBox">
-        <input id="codeInput" maxlength="13" placeholder="XXXX-XXXX-XXX" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        <input id="codeInput" maxlength="11" placeholder="XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false">
         <button class="btn-ghost" id="codeApply">확인</button>
       </div>
       <div class="note" id="codeNote">이 코드를 적어 두면 다른 폰이나 브라우저에서도 같은 사람으로 이어서 할 수 있어요.</div>
@@ -299,45 +305,117 @@ const SUPABASE_KEY = "sb_publishable_5IK46ha7sJofNA0KcAMfvg_P9YY6o0l";   // 예:
   }
   const solve = p => p.op==="+"?p.a+p.b : p.op==="-"?p.a-p.b : p.op==="*"?p.a*p.b : p.a/p.b;
 
-  // ---------- 닉네임 ----------
-  const ADJ = ["빠른","씩씩한","똑똑한","용감한","반짝이는","신나는","날쌘","튼튼한","귀여운","멋진","즐거운","침착한","재빠른","힘찬"];
-  const ANI = ["호랑이","토끼","다람쥐","고양이","강아지","펭귄","돌고래","부엉이","여우","판다","코알라","치타","거북이","사자"];
-  // 플레이어 코드: 8자리 ID + 닉네임 3자리 → 예) K7PQ-29XM-B4D
+  // ---------- 이름 / 플레이어 코드 ----------
+  // 플레이어 코드: 8자리 → 예) K7PQ-29XM  (이 코드가 곧 "나"예요)
   const ABC = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";       // 헷갈리는 0/O, 1/I 제외
   const newPid = () => { let x=""; const a=new Uint32Array(8); crypto.getRandomValues(a); for(const v of a) x += ABC[v % 32]; return x; };
   const validPid = p => typeof p==="string" && /^[A-HJ-NP-Z2-9]{8}$/.test(p);
-  const validNick = n => n && ADJ[n.a]!=null && ANI[n.n]!=null && Number.isInteger(n.k) && n.k>=1 && n.k<=99;
-  function encodeCode(){
-    let v = (nick.a*ANI.length + nick.n)*99 + (nick.k-1), t = "";
-    for(let i=0;i<3;i++){ t = ABC[v % 32] + t; v = Math.floor(v/32); }
-    return pid.slice(0,4) + "-" + pid.slice(4) + "-" + t;
-  }
+  const NAME_RE = /^[가-힣A-Za-z0-9]{2,10}$/;
+  const encodeCode = () => pid.slice(0,4) + "-" + pid.slice(4);
   function decodeCode(str){
     const c = String(str||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/O/g,"0").replace(/I/g,"1");
-    if(c.length !== 11) return null;
-    const p = c.slice(0,8); if(!validPid(p)) return null;
-    let v = 0;
-    for(const ch of c.slice(8)){ const d = ABC.indexOf(ch); if(d<0) return null; v = v*32 + d; }
-    const k = v % 99 + 1; v = Math.floor(v/99);
-    const n = { a: Math.floor(v/ANI.length), n: v % ANI.length, k };
-    return validNick(n) ? {pid:p, nick:n} : null;
+    return validPid(c) ? c : null;
   }
   let pid = store.get("bm-pid", null);
   if(!validPid(pid)){ pid = newPid(); store.set("bm-pid", pid); }
-  let nick = store.get("bm-nick", null);
-  function rollNick(init){ nick = {a:r(0,ADJ.length-1), n:r(0,ANI.length-1), k:r(1,99)}; store.set("bm-nick", nick); renderNick(); if(!init) loadBoard(); }
-  const nickText = () => ADJ[nick.a] + " " + ANI[nick.n] + " " + nick.k;
-  const playerKey = () => pid + "-" + nick.a + "-" + nick.n + "-" + nick.k;
-  function renderNick(){ $("nickName").textContent = nickText(); $("myCode").textContent = encodeCode(); }
-  if(!validNick(nick)) rollNick(true); else renderNick();
-  $("nickRoll").onclick = () => rollNick(false);
+  let myName = store.get("bm-name", null);
+  if(typeof myName!=="string" || !NAME_RE.test(myName)) myName = null;
+  const playerKey = () => pid;
+
+  const nickNote = (t, cls) => { const n=$("nickNote"); n.className = "note" + (cls ? " "+cls : ""); n.textContent = t; };
+  const RULE = "한글, 영문, 숫자로 2~10자 (띄어쓰기·특수문자는 안 돼요)";
+  const REASON = {
+    length: "이름은 2~10자로 써 주세요.",
+    chars: "한글(완성된 글자), 영문, 숫자만 쓸 수 있어요. 띄어쓰기·특수문자·ㅋㅋ 같은 자음은 안 돼요.",
+    banned: "쓸 수 없는 단어가 들어 있어요. 다른 이름을 써 주세요.",
+    taken: "이미 누가 쓰고 있는 이름이에요. 다른 이름을 써 주세요.",
+    too_often: "이름은 1분에 한 번만 바꿀 수 있어요. 잠시 후 다시 해 주세요."
+  };
+  function localProblem(v){
+    if(v.length < 2 || v.length > 10) return "length";
+    if(!NAME_RE.test(v)) return "chars";
+    return null;
+  }
+  function renderNick(){
+    $("myCode").textContent = encodeCode();
+    if(myName){
+      $("nickName").textContent = myName;
+      $("nickView").classList.remove("hidden");
+      $("nickBox").classList.add("hidden");
+    } else {
+      $("nickView").classList.add("hidden");
+      $("nickBox").classList.remove("hidden");
+      $("nickCancel").classList.add("hidden");
+    }
+  }
+  function openNickEdit(){
+    $("nickInput").value = myName || "";
+    $("nickView").classList.add("hidden");
+    $("nickBox").classList.remove("hidden");
+    $("nickCancel").classList.toggle("hidden", !myName);
+    nickNote(RULE); $("nickInput").focus();
+  }
+  $("nickEdit").onclick = openNickEdit;
+  $("nickCancel").onclick = () => { renderNick(); nickNote(RULE); };
+
+  // 입력하는 동안 미리 확인 (0.4초 쉬면 서버에 물어봄)
+  let checkTimer = 0, checkSeq = 0;
+  $("nickInput").addEventListener("input", () => {
+    clearTimeout(checkTimer);
+    const v = $("nickInput").value.trim(), seq = ++checkSeq;
+    if(!v){ nickNote(RULE); return; }
+    const pr = localProblem(v);
+    if(pr){ nickNote(REASON[pr], v.length < 2 && pr==="length" ? "" : "bad"); return; }
+    if(v === myName){ nickNote("지금 쓰고 있는 이름이에요."); return; }
+    if(!sb){ nickNote("좋아요! 확인을 눌러 주세요.", "ok"); return; }
+    nickNote("확인하는 중…");
+    checkTimer = setTimeout(async () => {
+      try{
+        const res = await rpc("check_nickname", {p_nick: v, p_player: pid});
+        if(seq !== checkSeq) return;
+        if(res && res.ok) nickNote("✓ 쓸 수 있는 이름이에요. 확인을 눌러 주세요.", "ok");
+        else nickNote(REASON[res && res.reason] || "쓸 수 없는 이름이에요.", "bad");
+      }catch(e){ if(seq === checkSeq) nickNote(RULE); }
+    }, 400);
+  });
+  async function saveNick(){
+    const v = $("nickInput").value.trim();
+    const pr = localProblem(v);
+    if(pr){ nickNote(REASON[pr], "bad"); $("nickInput").focus(); return; }
+    if(v === myName){ renderNick(); nickNote(RULE); return; }
+    const btn = $("nickSave"); btn.disabled = true;
+    try{
+      if(sb){
+        const res = await rpc("set_nickname", {p_player: pid, p_nick: v});
+        if(!res || !res.ok){ nickNote(REASON[res && res.reason] || "이름을 저장하지 못했어요.", "bad"); $("nickInput").focus(); return; }
+        myName = res.nick;
+      } else myName = v;                       // 연습 모드: 이 기기에만
+      store.set("bm-name", myName);
+      renderNick(); nickNote("'" + myName + "'(으)로 정했어요!", "ok"); loadBoard();
+    }catch(e){
+      nickNote("서버에 연결하지 못했어요. 잠시 후 다시 해 주세요.", "bad");
+    }finally{ btn.disabled = false; }
+  }
+  $("nickSave").onclick = saveNick;
+  $("nickInput").addEventListener("keydown", e => { if(e.key==="Enter" && !e.isComposing) saveNick(); });
+
+  // 서버에 등록된 내 이름 불러오기 (다른 곳에서 바꿨을 수도 있으니)
+  async function syncName(){
+    if(!sb) return;
+    try{
+      const res = await rpc("get_player", {p_player: pid});
+      const n = res && typeof res.nick === "string" ? res.nick : null;
+      if(n !== myName){ myName = n; if(n) store.set("bm-name", n); renderNick(); loadBoard(); }
+      if(!n) nickNote("처음 오셨네요! 랭킹에 보일 이름을 정해 주세요. " + RULE);
+    }catch(e){}
+  }
 
   // 저장이 실제로 되는지 확인 → 안 되면 코드를 꼭 적어 두라고 안내
   (function(){
     let ok = false;
     try{ localStorage.setItem("bm-test","1"); ok = localStorage.getItem("bm-test")==="1"; }catch(e){}
     if(!ok){ cookie.set("bm-test","1"); ok = cookie.get("bm-test")==="1"; }
-    if(!ok){ const n=$("codeNote"); n.className="note bad"; n.textContent="이 브라우저는 닉네임을 기억하지 못해요. 크롬이나 사파리로 열거나, 내 코드를 적어 두었다가 '다른 기기에서 이어하기'로 입력하세요."; }
+    if(!ok){ const n=$("codeNote"); n.className="note bad"; n.textContent="이 브라우저는 내 이름을 기억하지 못해요. 크롬이나 사파리로 열거나, 내 코드를 적어 두었다가 '다른 기기에서 이어하기'로 입력하세요."; }
   })();
   const setNote = (t, cls) => { const n=$("codeNote"); n.className = "note" + (cls ? " "+cls : ""); n.textContent = t; };
   $("copyCode").onclick = async () => {
@@ -345,12 +423,17 @@ const SUPABASE_KEY = "sb_publishable_5IK46ha7sJofNA0KcAMfvg_P9YY6o0l";   // 예:
     catch(e){ setNote("복사가 안 돼요. 화면의 코드를 직접 적어 두세요."); }
   };
   $("openRestore").onclick = () => { $("restoreBox").classList.toggle("hidden"); $("codeInput").focus(); };
-  const applyCode = () => {
-    const d = decodeCode($("codeInput").value);
-    if(!d){ setNote("코드가 올바르지 않아요. 다시 확인해 주세요.", "bad"); return; }
-    pid = d.pid; nick = d.nick; store.set("bm-pid", pid); store.set("bm-nick", nick);
-    renderNick(); $("restoreBox").classList.add("hidden"); $("codeInput").value = "";
-    setNote("'" + nickText() + "'(으)로 이어서 할게요!", "ok"); loadBoard();
+  const applyCode = async () => {
+    const c = decodeCode($("codeInput").value);
+    if(!c){ setNote("코드가 올바르지 않아요. 8자리 코드를 다시 확인해 주세요.", "bad"); return; }
+    if(!sb){ setNote("서버에 연결되지 않아서 지금은 이어하기를 할 수 없어요.", "bad"); return; }
+    try{
+      const res = await rpc("get_player", {p_player: c});
+      if(!res || typeof res.nick !== "string"){ setNote("이 코드로 등록된 이름이 없어요. 다시 확인해 주세요.", "bad"); return; }
+      pid = c; myName = res.nick; store.set("bm-pid", pid); store.set("bm-name", myName);
+      renderNick(); nickNote(RULE); $("restoreBox").classList.add("hidden"); $("codeInput").value = "";
+      setNote("'" + myName + "'(으)로 이어서 할게요!", "ok"); loadBoard();
+    }catch(e){ setNote("서버에 연결하지 못했어요. 잠시 후 다시 해 주세요.", "bad"); }
   };
   $("codeApply").onclick = applyCode;
   $("codeInput").addEventListener("keydown", e => { if(e.key==="Enter") applyCode(); });
@@ -447,6 +530,10 @@ const SUPABASE_KEY = "sb_publishable_5IK46ha7sJofNA0KcAMfvg_P9YY6o0l";   // 예:
   function tick(){ $("timer").textContent = fmt(performance.now()-t0); raf = requestAnimationFrame(tick); }
 
   function start(){
+    if(!myName){
+      openNickEdit(); nickNote("먼저 랭킹에 보일 이름을 정해 주세요. " + RULE, "bad");
+      window.scrollTo({top:0, behavior:"smooth"}); return;
+    }
     idx = 0; input = ""; wrong = 0; busy = true; playing = true; roundId = null; given = []; probs = [];
     $("hint").textContent = ""; $("timer").textContent = "0.00"; $("ans").className = "ans"; $("ans").textContent = " ";
     $("count").textContent = "1 / " + N; [...$("dots").children].forEach(x=>x.className="");
@@ -463,11 +550,15 @@ const SUPABASE_KEY = "sb_publishable_5IK46ha7sJofNA0KcAMfvg_P9YY6o0l";   // 예:
       if(sb){
         $("expr").textContent = "문제 받는 중…";
         try{
-          const res = await rpc("start_round", {p_level: level, p_player: playerKey(), p_nick_a: nick.a, p_nick_n: nick.n, p_nick_k: nick.k});
+          const res = await rpc("start_round", {p_level: level, p_player: pid});
           if(!playing) return;
           roundId = res.round_id; probs = res.problems;
         }catch(e){
           if(!playing) return;
+          if(String(e && e.message || "").includes("no nickname")){
+            playing = false; myName = null; show("home"); renderNick();
+            nickNote("먼저 랭킹에 보일 이름을 정해 주세요. " + RULE, "bad"); return;
+          }
           $("hint").textContent = "서버 연결이 안 돼서 연습 모드로 진행해요 (기록 저장 안 됨).";
           probs = localRound(level);
         }
@@ -540,7 +631,7 @@ const SUPABASE_KEY = "sb_publishable_5IK46ha7sJofNA0KcAMfvg_P9YY6o0l";   // 예:
   $("homeBtn").onclick = () => { show("home"); loadBoard(); };
   $("quitBtn").onclick = () => { playing = false; cancelAnimationFrame(raf); $("cd").classList.add("hidden"); show("home"); loadBoard(); };
 
-  buildPad(); buildDots(); renderLevels(); loadBoard();
+  buildPad(); buildDots(); renderLevels(); renderNick(); loadBoard(); syncName();
   setInterval(()=>{ if(!$("home").classList.contains("hidden")) loadBoard(); }, 30000);
 })();
 </script>
