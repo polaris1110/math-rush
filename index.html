@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>번개 산수</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FFF7EA; --card:#FFFFFF; --ink:#2B2A33; --muted:#7A7686; --line:#EFE6D6;
+    --primary:#FF7A45; --primary-d:#E8612C;
+    --easy:#2FA866; --normal:#3B82F6; --hard:#8B5CF6;
+    --ok:#22A55B; --bad:#E5484D;
+    --radius:20px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Gowun Dodum",system-ui,sans-serif}
+  body{min-height:100vh;display:flex;justify-content:center;padding:20px 14px 40px}
+  .wrap{width:100%;max-width:560px}
+  h1,h2,h3,.display{font-family:"Jua",system-ui,sans-serif;font-weight:400;margin:0}
+  button{font-family:"Jua",system-ui,sans-serif;cursor:pointer;border:0;color:inherit}
+  .hidden{display:none!important}
+
+  .brand{display:flex;align-items:center;gap:10px;margin:4px 4px 16px}
+  .brand .bolt{width:40px;height:40px;border-radius:12px;background:var(--primary);display:grid;place-items:center;box-shadow:0 4px 0 var(--primary-d)}
+  .brand h1{font-size:30px;letter-spacing:-.5px}
+  .brand small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+
+  .card{background:var(--card);border-radius:var(--radius);padding:18px;box-shadow:0 2px 0 var(--line),0 8px 24px rgba(80,60,20,.06);margin-bottom:14px}
+  .label{font-size:13px;color:var(--muted);margin-bottom:8px}
+
+  .nick{display:flex;align-items:center;gap:10px}
+  .nick .name{font-family:"Jua";font-size:22px;flex:1}
+  .btn-ghost{background:#F6EFE2;padding:9px 12px;border-radius:12px;font-size:15px}
+  .btn-ghost:hover{background:#EFE5D3}
+
+  .levels{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .lv{background:#FAF5EC;border-radius:16px;padding:14px 10px;text-align:center;border:3px solid transparent;transition:transform .08s}
+  .lv:active{transform:scale(.97)}
+  .lv .t{font-family:"Jua";font-size:22px}
+  .lv .d{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.35;font-family:"Gowun Dodum"}
+  .lv[data-lv=easy] .t{color:var(--easy)} .lv[data-lv=normal] .t{color:var(--normal)} .lv[data-lv=hard] .t{color:var(--hard)}
+  .lv.sel[data-lv=easy]{border-color:var(--easy);background:#EAF7EF}
+  .lv.sel[data-lv=normal]{border-color:var(--normal);background:#EAF1FE}
+  .lv.sel[data-lv=hard]{border-color:var(--hard);background:#F1ECFE}
+
+  .rules{font-size:13.5px;color:var(--muted);margin:12px 2px 0;line-height:1.6}
+  .rules b{color:var(--ink)}
+
+  .btn-main{width:100%;background:var(--primary);color:#fff;font-size:24px;padding:16px;border-radius:18px;box-shadow:0 5px 0 var(--primary-d);margin-top:14px}
+  .btn-main:active{transform:translateY(3px);box-shadow:0 2px 0 var(--primary-d)}
+
+  /* leaderboard */
+  .lb-head{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:10px}
+  .lb-head h2{font-size:22px}
+  .week{font-size:12.5px;color:var(--muted);text-align:right;line-height:1.45}
+  .tabs{display:flex;gap:6px;background:#F6EFE2;border-radius:14px;padding:4px;margin-bottom:10px}
+  .tab{flex:1;padding:8px 0;border-radius:10px;background:transparent;font-size:16px;color:var(--muted)}
+  .tab.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .rows{list-style:none;margin:0;padding:0}
+  .row{display:flex;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px dashed var(--line)}
+  .row:last-child{border-bottom:0}
+  .row .rk{width:34px;text-align:center;font-family:"Jua";font-size:18px;color:var(--muted)}
+  .row .nm{flex:1;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .tm{font-family:"Jua";font-size:18px;font-variant-numeric:tabular-nums}
+  .row .wr{font-size:12px;color:var(--muted);width:44px;text-align:right}
+  .row.me{background:#FFF1E6;border-radius:12px;border-bottom-color:transparent}
+  .row.me .nm::after{content:" (나)";color:var(--primary);font-size:13px}
+  .empty{color:var(--muted);text-align:center;padding:22px 0;font-size:14.5px}
+  .mode{font-size:12px;color:var(--muted);margin-top:10px;text-align:center}
+
+  /* play */
+  .play-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .timer{font-family:"Jua";font-size:34px;font-variant-numeric:tabular-nums}
+  .count{font-family:"Jua";font-size:18px;color:var(--muted)}
+  .dots{display:grid;grid-template-columns:repeat(20,1fr);gap:4px;margin-bottom:14px}
+  .dots i{height:8px;border-radius:4px;background:#EADFCB}
+  .dots i.done{background:var(--ok)} .dots i.cur{background:var(--primary)}
+  .q{background:var(--card);border-radius:24px;padding:28px 12px 22px;text-align:center;box-shadow:0 2px 0 var(--line),0 8px 24px rgba(80,60,20,.06)}
+  .q .expr{font-family:"Jua";font-size:clamp(44px,13vw,64px);letter-spacing:1px;white-space:nowrap}
+  .q .ans{font-family:"Jua";font-size:clamp(40px,12vw,56px);min-height:1.3em;margin-top:8px;border-radius:16px;background:#FAF5EC;display:inline-block;min-width:150px;padding:2px 18px;color:var(--primary)}
+  .q .ans.ok{background:#E2F6EA;color:var(--ok)}
+  .q .ans.bad{background:#FDE7E8;color:var(--bad);animation:shake .3s}
+  .q .hint{font-size:13px;color:var(--muted);margin-top:10px;min-height:18px}
+  @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
+  .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+  .pad button{background:#fff;font-size:30px;padding:14px 0;border-radius:16px;box-shadow:0 4px 0 var(--line)}
+  .pad button:active{transform:translateY(3px);box-shadow:0 1px 0 var(--line)}
+  .pad .fn{background:#F6EFE2;font-size:20px;color:var(--muted)}
+  .quit{background:transparent;color:var(--muted);font-family:"Gowun Dodum";font-size:14px;padding:6px 8px;text-decoration:underline}
+
+  .overlay{position:fixed;inset:0;background:rgba(255,247,234,.94);display:grid;place-items:center;z-index:10}
+  .overlay .n{font-family:"Jua";font-size:120px;color:var(--primary);animation:pop .9s ease-out}
+  @keyframes pop{0%{transform:scale(.4);opacity:0}30%{transform:scale(1.1);opacity:1}100%{transform:scale(1);opacity:.9}}
+
+  /* result */
+  .res{text-align:center;padding:26px 18px}
+  .res .lvtag{display:inline-block;font-family:"Jua";font-size:15px;padding:4px 12px;border-radius:999px;color:#fff}
+  .res .big{font-family:"Jua";font-size:64px;margin:10px 0 2px;font-variant-numeric:tabular-nums}
+  .res .sub{color:var(--muted);font-size:15px}
+  .res .badge{margin-top:14px;font-family:"Jua";font-size:20px;color:var(--primary)}
+  .res .rank{margin-top:6px;font-size:16px}
+  .res .warn{margin-top:12px;color:var(--bad);font-size:14px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+  .row2 .btn-main{margin-top:0;font-size:20px;padding:14px}
+  .btn-sec{width:100%;background:#F6EFE2;font-size:20px;padding:14px;border-radius:18px;box-shadow:0 5px 0 #E6DAC4}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HOME -->
+  <section id="home">
+    <div class="brand">
+      <div class="bolt" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="#fff"/></svg>
+      </div>
+      <div><h1>번개 산수</h1><small>20문제를 얼마나 빨리 풀 수 있을까?</small></div>
+    </div>
+
+    <div class="card">
+      <div class="label">내 닉네임</div>
+      <div class="nick">
+        <div class="name" id="nickName"></div>
+        <button class="btn-ghost" id="nickRoll">🎲 바꾸기</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label">난이도</div>
+      <div class="levels" id="levels"></div>
+      <p class="rules">
+        <b>20문제</b>를 다 풀 때까지 걸린 시간이 기록돼요.<br>
+        틀리면 <b>맞힐 때까지 다시</b> 풀어야 해요. 서두르다 틀리면 손해!<br>
+        랭킹은 <b>매주 월요일 0시</b>에 새로 시작해요.
+      </p>
+      <button class="btn-main" id="startBtn">시작하기</button>
+    </div>
+
+    <div class="card">
+      <div class="lb-head">
+        <h2>🏆 이번 주 랭킹</h2>
+        <div class="week" id="weekInfo"></div>
+      </div>
+      <div class="tabs" id="tabs"></div>
+      <ol class="rows" id="rows"></ol>
+      <div class="mode" id="modeInfo">랭킹을 불러오는 중…</div>
+    </div>
+  </section>
+
+  <!-- PLAY -->
+  <section id="play" class="hidden">
+    <div class="play-top">
+      <div class="timer" id="timer">0.00</div>
+      <div class="count" id="count">1 / 20</div>
+    </div>
+    <div class="dots" id="dots"></div>
+    <div class="q">
+      <div class="expr" id="expr"></div>
+      <div class="ans" id="ans">&nbsp;</div>
+      <div class="hint" id="hint"></div>
+    </div>
+    <div class="pad" id="pad"></div>
+    <div style="text-align:center;margin-top:12px"><button class="quit" id="quitBtn">그만하기</button></div>
+  </section>
+
+  <!-- RESULT -->
+  <section id="result" class="hidden">
+    <div class="card res">
+      <span class="lvtag" id="rLv"></span>
+      <div class="big" id="rTime"></div>
+      <div class="sub" id="rSub"></div>
+      <div class="badge" id="rBadge"></div>
+      <div class="rank" id="rRank"></div>
+      <div class="warn" id="rWarn"></div>
+      <div class="row2">
+        <button class="btn-sec" id="homeBtn">처음으로</button>
+        <button class="btn-main" id="againBtn">다시 하기</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="overlay hidden" id="cd"><div class="n" id="cdN">3</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ===================== 설정 =====================
+   Supabase 대시보드 → Project Settings → API Keys 에서 복사해 넣으세요.
+   (publishable/anon 키는 브라우저에 공개돼도 되는 키입니다. secret/service_role 키는 절대 넣지 마세요!) */
+const SUPABASE_URL = "https://qiavajmpyqaghdsvsrgn.supabase.co";      // 예: https://abcdefgh.supabase.co
+const SUPABASE_KEY = "sb_publishable_5IK46ha7sJofNA0KcAMfvg_P9YY6o0l";   // 예: sb_publishable_... 또는 eyJ... (anon)
+/* ================================================ */
+
+(function(){
+  "use strict";
+  const N = 20;
+  const LEVELS = {
+    easy:   {name:"초급", desc:"한 자리\n덧셈·뺄셈", color:"var(--easy)"},
+    normal: {name:"중급", desc:"두 자리 ± 한 자리\n구구단 ×, ÷", color:"var(--normal)"},
+    hard:   {name:"고급", desc:"두 자리 ± 두 자리\n두 자리 ×, ÷", color:"var(--hard)"}
+  };
+  const OPS = {"+":"+", "-":"−", "*":"×", "/":"÷"};
+  const $ = id => document.getElementById(id);
+  const store = {
+    get(k, d){ try{ const v = localStorage.getItem(k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
+    set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+  };
+
+  // ---------- 서버 연결 ----------
+  let sb = null;
+  const configured = !SUPABASE_URL.startsWith("YOUR_") && !SUPABASE_KEY.startsWith("YOUR_");
+  try{ if(configured && window.supabase) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {auth:{persistSession:false}}); }catch(e){ sb = null; }
+  async function rpc(fn, args){
+    if(!sb) throw new Error("no server");
+    const { data, error } = await sb.rpc(fn, args);
+    if(error) throw error;
+    return data;
+  }
+
+  // ---------- 주차 표시 (한국 시간, 월요일 시작) ----------
+  const DAY = 86400000, KST = 9*3600000;
+  function weekInfo(){
+    const k = new Date(Date.now() + KST);
+    const dayIdx = (k.getUTCDay() + 6) % 7;
+    const mon = Date.UTC(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate()) - dayIdx*DAY;
+    const left = mon + 7*DAY - (Date.now() + KST);
+    const fmt = t => { const d = new Date(t); return (d.getUTCMonth()+1)+"월 "+d.getUTCDate()+"일"; };
+    return { range: fmt(mon)+"(월) ~ "+fmt(mon+6*DAY)+"(일)", left };
+  }
+
+  // ---------- 연습 모드용 로컬 문제 생성 (서버 연결이 안 될 때만) ----------
+  const r = (a,b) => a + Math.floor(Math.random()*(b-a+1));
+  const T = {
+    easy: [
+      {op:"+", n:10, k:4, make:()=>{ const a=r(1,9), b=r(1,9); return [a,b,a+b>=10]; }},
+      {op:"-", n:10, k:4, make:()=>{ const a=r(2,18), b=r(1,9); if(a-b<0) return null; return [a,b,a>=10 && a%10<b]; }}
+    ],
+    normal: [
+      {op:"+", n:5, k:3, make:()=>{ const a=r(11,89), b=r(2,9); return [a,b,a%10+b>=10]; }},
+      {op:"-", n:5, k:3, make:()=>{ const a=r(11,99), b=r(2,9); if(a-b<10) return null; return [a,b,a%10<b]; }},
+      {op:"*", n:5, k:null, make:()=>[r(2,9), r(2,9), false]},
+      {op:"/", n:5, k:null, make:()=>{ const b=r(2,9), q=r(2,9); return [b*q,b,false]; }}
+    ],
+    hard: [
+      {op:"+", n:5, k:3, make:()=>{ const a=r(11,79), b=r(11,79); if(a+b>99) return null; return [a,b,a%10+b%10>=10]; }},
+      {op:"-", n:5, k:3, make:()=>{ const a=r(30,99), b=r(11,89); if(a-b<10) return null; return [a,b,a%10<b%10]; }},
+      {op:"*", n:5, k:null, make:()=>{ const a=r(12,39), b=r(2,9); const p=a*b; if(p<40||p>199) return null; return [a,b,false]; }},
+      {op:"/", n:5, k:null, make:()=>{ const b=r(3,9), q=r(12,25); if(b*q>199) return null; return [b*q,b,false]; }}
+    ]
+  };
+  function localRound(level){
+    const used = new Set(), out = [];
+    for(const blk of T[level]){
+      let need = blk.k, left = blk.n;
+      for(let i=0;i<blk.n;i++){
+        const f = blk.k==null ? null : Math.random() < need/left;
+        for(let t=0;t<5000;t++){
+          const m = blk.make(); if(!m) continue;
+          const [a,b,c] = m, key = a+blk.op+b;
+          if((f!==null && c!==f) || used.has(key)) continue;
+          used.add(key); out.push({a, op:blk.op, b}); break;
+        }
+        if(f) need--; left--;
+      }
+    }
+    return out;
+  }
+  const solve = p => p.op==="+"?p.a+p.b : p.op==="-"?p.a-p.b : p.op==="*"?p.a*p.b : p.a/p.b;
+
+  // ---------- 닉네임 ----------
+  const ADJ = ["빠른","씩씩한","똑똑한","용감한","반짝이는","신나는","날쌘","튼튼한","귀여운","멋진","즐거운","침착한","재빠른","힘찬"];
+  const ANI = ["호랑이","토끼","다람쥐","고양이","강아지","펭귄","돌고래","부엉이","여우","판다","코알라","치타","거북이","사자"];
+  let pid = store.get("bm-pid", null);
+  if(!pid){ pid = Date.now().toString(36) + Math.random().toString(36).slice(2,10); store.set("bm-pid", pid); }
+  let nick = store.get("bm-nick", null);
+  function rollNick(init){ nick = {a:r(0,ADJ.length-1), n:r(0,ANI.length-1), k:r(1,99)}; store.set("bm-nick", nick); renderNick(); if(!init) loadBoard(); }
+  const nickText = () => ADJ[nick.a] + " " + ANI[nick.n] + " " + nick.k;
+  const playerKey = () => pid + "-" + nick.a + "-" + nick.n + "-" + nick.k;
+  function renderNick(){ $("nickName").textContent = nickText(); }
+  if(!nick || ADJ[nick.a]==null || ANI[nick.n]==null || !(nick.k>=1 && nick.k<=99)) rollNick(true); else renderNick();
+  $("nickRoll").onclick = () => rollNick(false);
+
+  // ---------- 난이도 ----------
+  let level = store.get("bm-level", "normal"); if(!LEVELS[level]) level = "normal";
+  let tab = level;
+  function renderLevels(){
+    const box = $("levels"); box.innerHTML = "";
+    for(const [k,v] of Object.entries(LEVELS)){
+      const b = document.createElement("button");
+      b.className = "lv" + (k===level ? " sel" : ""); b.dataset.lv = k;
+      const t = document.createElement("div"); t.className="t"; t.textContent = v.name;
+      const d = document.createElement("div"); d.className="d"; d.innerHTML = v.desc.replace("\n","<br>");
+      b.append(t,d);
+      b.onclick = () => { level = k; tab = k; store.set("bm-level", k); renderLevels(); loadBoard(); };
+      box.append(b);
+    }
+  }
+
+  // ---------- 랭킹 ----------
+  const fmt = ms => (ms/1000).toFixed(2);
+  let boardReq = 0;
+  function renderTabs(){
+    const box = $("tabs"); box.innerHTML = "";
+    for(const [k,v] of Object.entries(LEVELS)){
+      const b = document.createElement("button");
+      b.className = "tab" + (k===tab?" on":""); b.textContent = v.name;
+      b.onclick = () => { tab = k; loadBoard(); };
+      box.append(b);
+    }
+  }
+  function renderWeek(){
+    const w = weekInfo(), h = Math.floor(w.left/3600000), d = Math.floor(h/24);
+    $("weekInfo").innerHTML = "";
+    $("weekInfo").append(w.range, document.createElement("br"), "초기화까지 " + (d>0 ? d+"일 " : "") + (h%24) + "시간");
+  }
+  function msg(text){ const ul = $("rows"); ul.innerHTML = ""; const li = document.createElement("li"); li.className="empty"; li.textContent = text; ul.append(li); }
+  async function loadBoard(){
+    renderTabs(); renderWeek();
+    if(!sb){
+      msg(configured ? "서버에 연결할 수 없어요." : "서버 설정 전이라 연습 모드예요. 기록은 저장되지 않아요.");
+      $("modeInfo").textContent = configured ? "잠시 후 다시 시도해 주세요." : "index.html 상단에 Supabase 주소와 키를 넣으면 랭킹이 켜져요.";
+      return;
+    }
+    const my = ++boardReq, lv = tab;
+    try{
+      const rows = await rpc("get_leaderboard", {p_level: lv, p_player: playerKey()});
+      if(my !== boardReq) return;
+      $("modeInfo").textContent = "모두가 함께 보는 랭킹이에요.";
+      const ul = $("rows"); ul.innerHTML = "";
+      if(!rows || !rows.length){ msg("아직 기록이 없어요. 이번 주 1등에 도전해 보세요!"); return; }
+      const medal = ["🥇","🥈","🥉"];
+      let prev = 0;
+      for(const e of rows){
+        const rk = Number(e.rank);
+        if(rk > prev + 1){ const gap=document.createElement("li"); gap.className="empty"; gap.style.padding="4px 0"; gap.textContent="⋯"; ul.append(gap); }
+        prev = rk;
+        const li = document.createElement("li"); li.className = "row" + (e.is_me ? " me" : "");
+        const a = document.createElement("span"); a.className="rk"; a.textContent = rk<=3 ? medal[rk-1] : rk;
+        const nm = document.createElement("span"); nm.className="nm"; nm.textContent = String(e.nick);
+        const wr = document.createElement("span"); wr.className="wr"; wr.textContent = e.wrong ? "실수 "+e.wrong : "";
+        const tm = document.createElement("span"); tm.className="tm"; tm.textContent = fmt(e.best_ms)+"초";
+        li.append(a,nm,wr,tm); ul.append(li);
+      }
+      const cnt = document.createElement("li"); cnt.className="empty"; cnt.style.padding="10px 0 0";
+      cnt.textContent = "이번 주 " + rows[0].total + "명 참여"; ul.append(cnt);
+    }catch(e){
+      if(my !== boardReq) return;
+      msg("랭킹을 불러오지 못했어요."); $("modeInfo").textContent = "잠시 후 다시 시도해 주세요.";
+    }
+  }
+
+  // ---------- 게임 진행 ----------
+  let probs = [], idx = 0, input = "", wrong = 0, t0 = 0, raf = 0, busy = false, playing = false, roundId = null, given = [];
+  function show(id){ for(const s of ["home","play","result"]) $(s).classList.toggle("hidden", s!==id); window.scrollTo(0,0); }
+  function buildPad(){
+    const pad = $("pad"); pad.innerHTML = "";
+    for(const k of ["1","2","3","4","5","6","7","8","9","C","0","←"]){
+      const b = document.createElement("button"); b.textContent = k;
+      if(k==="C"||k==="←") b.className = "fn";
+      b.addEventListener("pointerdown", ev => { ev.preventDefault(); press(k); });
+      pad.append(b);
+    }
+  }
+  function buildDots(){ const d = $("dots"); d.innerHTML = ""; for(let i=0;i<N;i++) d.append(document.createElement("i")); }
+  function paint(){
+    const p = probs[idx];
+    $("expr").textContent = p.a + " " + OPS[p.op] + " " + p.b + " =";
+    $("ans").textContent = input || " ";
+    $("count").textContent = (idx+1) + " / " + N;
+    [...$("dots").children].forEach((x,i)=>{ x.className = i<idx ? "done" : i===idx ? "cur" : ""; });
+  }
+  function tick(){ $("timer").textContent = fmt(performance.now()-t0); raf = requestAnimationFrame(tick); }
+
+  function start(){
+    idx = 0; input = ""; wrong = 0; busy = true; playing = true; roundId = null; given = []; probs = [];
+    $("hint").textContent = ""; $("timer").textContent = "0.00"; $("ans").className = "ans"; $("ans").textContent = " ";
+    $("count").textContent = "1 / " + N; [...$("dots").children].forEach(x=>x.className="");
+    $("expr").textContent = "준비!";
+    show("play");
+    const cd = $("cd"), n = $("cdN"); cd.classList.remove("hidden");
+    let c = 3; n.textContent = c;
+    const step = async () => {
+      if(!playing){ cd.classList.add("hidden"); return; }
+      c--;
+      if(c>0){ n.textContent = c; n.style.animation="none"; void n.offsetWidth; n.style.animation=""; setTimeout(step, 800); return; }
+      cd.classList.add("hidden");
+      // 카운트다운이 끝난 뒤 서버에서 문제를 받아 옴 → 서버 시계로 시간 측정 시작
+      if(sb){
+        $("expr").textContent = "문제 받는 중…";
+        try{
+          const res = await rpc("start_round", {p_level: level, p_player: playerKey(), p_nick_a: nick.a, p_nick_n: nick.n, p_nick_k: nick.k});
+          if(!playing) return;
+          roundId = res.round_id; probs = res.problems;
+        }catch(e){
+          if(!playing) return;
+          $("hint").textContent = "서버 연결이 안 돼서 연습 모드로 진행해요 (기록 저장 안 됨).";
+          probs = localRound(level);
+        }
+      } else probs = localRound(level);
+      if(!playing) return;
+      busy = false; paint(); t0 = performance.now(); tick();
+    };
+    setTimeout(step, 800);
+  }
+
+  function press(k){
+    if(!playing || busy) return;
+    const ansEl = $("ans");
+    if(k==="C") input="";
+    else if(k==="←") input = input.slice(0,-1);
+    else if(/^\d$/.test(k) && input.length < 4) input += k;
+    ansEl.className = "ans"; paint();
+    const target = String(solve(probs[idx]));
+    if(input.length >= target.length){
+      if(input === target){
+        ansEl.className = "ans ok"; busy = true; given.push(Number(input));
+        setTimeout(()=>{
+          idx++; input=""; ansEl.className="ans"; busy=false;
+          if(idx >= probs.length) finish(); else { $("hint").textContent=""; paint(); }
+        }, 120);
+      } else {
+        wrong++; busy = true;
+        ansEl.className = "ans bad"; $("hint").textContent = "앗, 다시 생각해 봐요!";
+        setTimeout(()=>{ input=""; ansEl.className="ans"; busy=false; paint(); }, 350);
+      }
+    }
+  }
+
+  async function finish(){
+    cancelAnimationFrame(raf); playing = false;
+    const localMs = Math.round(performance.now() - t0);
+    const lv = LEVELS[level];
+    $("rLv").textContent = lv.name; $("rLv").style.background = lv.color;
+    $("rTime").textContent = fmt(localMs) + "초";
+    $("rSub").textContent = N + "문제 완료 · 실수 " + wrong + "번";
+    $("rBadge").textContent = ""; $("rRank").textContent = ""; $("rWarn").textContent = "";
+    show("result");
+    if(!roundId){ $("rWarn").textContent = "연습 모드라 기록이 저장되지 않았어요."; return; }
+    $("rRank").textContent = "기록 확인 중…";
+    try{
+      const res = await rpc("finish_round", {p_round: roundId, p_answers: given, p_wrong: wrong});
+      if(res.status !== "done"){
+        $("rRank").textContent = "";
+        $("rWarn").textContent = res.reason === "time" ? "기록이 너무 빨라서 랭킹에 올리지 않았어요." : "기록을 확인하지 못해서 랭킹에 올리지 않았어요.";
+        return;
+      }
+      $("rTime").textContent = fmt(res.duration_ms) + "초";   // 공식 기록 = 서버가 잰 시간
+      $("rBadge").textContent = res.improved ? (res.prev_best == null ? "🎉 이번 주 첫 기록!" : "🎉 이번 주 내 최고 기록!")
+                                             : "이번 주 내 최고 기록: " + fmt(res.prev_best) + "초";
+      $("rRank").textContent = lv.name + " 이번 주 " + res.rank + "등 / " + res.total + "명";
+    }catch(e){
+      $("rRank").textContent = ""; $("rWarn").textContent = "서버에 기록을 저장하지 못했어요.";
+    }
+    tab = level;
+  }
+
+  document.addEventListener("keydown", e=>{
+    if($("play").classList.contains("hidden")) return;
+    if(/^\d$/.test(e.key)){ press(e.key); e.preventDefault(); }
+    else if(e.key==="Backspace"){ press("←"); e.preventDefault(); }
+    else if(e.key==="Escape") press("C");
+  });
+  $("startBtn").onclick = start;
+  $("againBtn").onclick = start;
+  $("homeBtn").onclick = () => { show("home"); loadBoard(); };
+  $("quitBtn").onclick = () => { playing = false; cancelAnimationFrame(raf); $("cd").classList.add("hidden"); show("home"); loadBoard(); };
+
+  buildPad(); buildDots(); renderLevels(); loadBoard();
+  setInterval(()=>{ if(!$("home").classList.contains("hidden")) loadBoard(); }, 30000);
+})();
+</script>
+</body>
+</html>
