@@ -113,6 +113,27 @@
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
   .row2 .btn-main{margin-top:0;font-size:20px;padding:14px}
   .btn-sec{width:100%;background:#F6EFE2;font-size:20px;padding:14px;border-radius:18px;box-shadow:0 5px 0 #E6DAC4}
+
+  /* settings */
+  .brand .gear{margin-left:auto}
+  .gear{width:42px;height:42px;border-radius:12px;background:#F6EFE2;display:grid;place-items:center;font-size:21px;flex:none}
+  .gear:hover{background:#EFE5D3}
+  .modal{position:fixed;inset:0;background:rgba(43,42,51,.35);display:grid;place-items:center;z-index:20;padding:16px}
+  .sheet{background:var(--card);border-radius:var(--radius);padding:20px 18px 18px;width:100%;max-width:380px;box-shadow:0 12px 40px rgba(0,0,0,.18)}
+  .sheet h2{font-size:24px;margin-bottom:6px}
+  .opt{display:flex;align-items:center;gap:12px;padding:14px 2px;border-bottom:1px dashed var(--line)}
+  .opt .ic{font-size:24px;width:30px;text-align:center}
+  .opt .tx{flex:1}
+  .opt .tx b{display:block;font-family:"Jua";font-weight:400;font-size:19px}
+  .opt .tx span{font-size:12.5px;color:var(--muted)}
+  .sw{width:56px;height:32px;border-radius:999px;background:#E3D9C7;position:relative;flex:none;transition:background .15s}
+  .sw::after{content:"";position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .15s}
+  .sw[aria-checked=true]{background:var(--ok)}
+  .sw[aria-checked=true]::after{transform:translateX(24px)}
+  .sw:disabled{opacity:.45;cursor:not-allowed}
+  .sheet .btn-main{margin-top:16px;font-size:20px;padding:13px}
+  .play-top .gear{width:36px;height:36px;font-size:18px}
+  .play-top .pr{display:flex;align-items:center;gap:10px}
 </style>
 </head>
 <body>
@@ -125,6 +146,7 @@
         <svg width="22" height="22" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="#fff"/></svg>
       </div>
       <div><h1>번개 산수</h1><small>20문제를 얼마나 빨리 풀 수 있을까?</small></div>
+      <button class="gear" data-settings aria-label="설정">⚙️</button>
     </div>
 
     <div class="card">
@@ -178,7 +200,7 @@
   <section id="play" class="hidden">
     <div class="play-top">
       <div class="timer" id="timer">0.00</div>
-      <div class="count" id="count">1 / 20</div>
+      <div class="pr"><div class="count" id="count">1 / 20</div><button class="gear" data-settings aria-label="설정">⚙️</button></div>
     </div>
     <div class="dots" id="dots"></div>
     <div class="q">
@@ -208,6 +230,23 @@
 </div>
 
 <div class="overlay hidden" id="cd"><div class="n" id="cdN">3</div></div>
+
+<div class="modal hidden" id="settings" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+  <div class="sheet">
+    <h2 id="setTitle">⚙️ 설정</h2>
+    <div class="opt">
+      <div class="ic">🔊</div>
+      <div class="tx"><b>소리</b><span>숫자를 누를 때, 맞혔을 때, 틀렸을 때 소리가 나요</span></div>
+      <button class="sw" id="swSound" role="switch" aria-checked="true" aria-label="소리"></button>
+    </div>
+    <div class="opt" style="border-bottom:0">
+      <div class="ic">📳</div>
+      <div class="tx"><b>진동</b><span id="vibNote">숫자를 누르거나 틀렸을 때 폰이 떨려요</span></div>
+      <button class="sw" id="swVib" role="switch" aria-checked="true" aria-label="진동"></button>
+    </div>
+    <button class="btn-main" id="setClose">닫기</button>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -243,6 +282,62 @@ const SUPABASE_KEY = "sb_publishable_5IK46ha7sJofNA0KcAMfvg_P9YY6o0l";   // 예:
     },
     set(k, v){ const t = JSON.stringify(v); try{ localStorage.setItem(k, t); }catch(e){} cookie.set(k, t); }
   };
+
+  // ---------- 소리 / 진동 ----------
+  const fx = (function(){
+    const canVib = typeof navigator.vibrate === "function";
+    let sound = store.get("bm-sound", true) !== false;
+    let vib = canVib && store.get("bm-vib", true) !== false;
+    let ctx = null;
+    function ac(){
+      if(!ctx){ const C = window.AudioContext || window.webkitAudioContext; if(!C) return null; try{ ctx = new C(); }catch(e){ return null; } }
+      if(ctx.state === "suspended") ctx.resume().catch(()=>{});
+      return ctx;
+    }
+    // notes: [주파수, 시작(초), 길이(초), 파형, 볼륨]
+    function play(notes){
+      if(!sound) return;
+      const c = ac(); if(!c) return;
+      const now = c.currentTime;
+      for(const [f, at, len, type, vol] of notes){
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = type || "sine"; o.frequency.setValueAtTime(f, now + at);
+        g.gain.setValueAtTime(0.0001, now + at);
+        g.gain.exponentialRampToValueAtTime(vol || 0.2, now + at + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + at + len);
+        o.connect(g).connect(c.destination);
+        o.start(now + at); o.stop(now + at + len + 0.02);
+      }
+    }
+    function buzz(p){ if(vib && canVib){ try{ navigator.vibrate(p); }catch(e){} } }
+    return {
+      canVib,
+      get sound(){ return sound; }, get vib(){ return vib; },
+      setSound(v){ sound = !!v; store.set("bm-sound", sound); if(sound) ac(); },
+      setVib(v){ vib = canVib && !!v; store.set("bm-vib", vib); },
+      unlock(){ if(sound) ac(); },
+      key(){ play([[660, 0, 0.05, "triangle", 0.12]]); buzz(12); },
+      ok(){ play([[880, 0, 0.09, "sine", 0.22], [1320, 0.07, 0.14, "sine", 0.2]]); buzz(25); },
+      bad(){ play([[220, 0, 0.18, "square", 0.08], [165, 0.12, 0.22, "square", 0.08]]); buzz([60, 40, 60]); },
+      tick(){ play([[520, 0, 0.12, "sine", 0.18]]); buzz(20); },
+      go(){ play([[1040, 0, 0.25, "sine", 0.22]]); buzz(50); },
+      done(){ play([[784,0,.12,"sine",.2],[988,.11,.12,"sine",.2],[1175,.22,.12,"sine",.2],[1568,.33,.35,"sine",.22]]); buzz([40,60,40,60,120]); }
+    };
+  })();
+
+  function renderSettings(){
+    $("swSound").setAttribute("aria-checked", String(fx.sound));
+    $("swVib").setAttribute("aria-checked", String(fx.vib));
+    $("swVib").disabled = !fx.canVib;
+    if(!fx.canVib) $("vibNote").textContent = "이 기기나 브라우저는 진동을 지원하지 않아요 (아이폰 등)";
+  }
+  document.querySelectorAll("[data-settings]").forEach(b => b.onclick = () => { renderSettings(); $("settings").classList.remove("hidden"); });
+  $("setClose").onclick = () => $("settings").classList.add("hidden");
+  $("settings").addEventListener("click", e => { if(e.target === $("settings")) $("settings").classList.add("hidden"); });
+  $("swSound").onclick = () => { fx.setSound(!fx.sound); renderSettings(); fx.key(); };
+  $("swVib").onclick = () => { fx.setVib(!fx.vib); renderSettings(); if(fx.vib) navigator.vibrate(40); };
+  // 브라우저 정책상 첫 터치 때 오디오를 깨워 둠
+  document.addEventListener("pointerdown", () => fx.unlock(), {once:true, capture:true});
 
   // ---------- 서버 연결 ----------
   let sb = null;
@@ -540,11 +635,11 @@ const SUPABASE_KEY = "sb_publishable_5IK46ha7sJofNA0KcAMfvg_P9YY6o0l";   // 예:
     $("expr").textContent = "준비!";
     show("play");
     const cd = $("cd"), n = $("cdN"); cd.classList.remove("hidden");
-    let c = 3; n.textContent = c;
+    let c = 3; n.textContent = c; fx.tick();
     const step = async () => {
       if(!playing){ cd.classList.add("hidden"); return; }
       c--;
-      if(c>0){ n.textContent = c; n.style.animation="none"; void n.offsetWidth; n.style.animation=""; setTimeout(step, 800); return; }
+      if(c>0){ n.textContent = c; fx.tick(); n.style.animation="none"; void n.offsetWidth; n.style.animation=""; setTimeout(step, 800); return; }
       cd.classList.add("hidden");
       // 카운트다운이 끝난 뒤 서버에서 문제를 받아 옴 → 서버 시계로 시간 측정 시작
       if(sb){
@@ -564,7 +659,7 @@ const SUPABASE_KEY = "sb_publishable_5IK46ha7sJofNA0KcAMfvg_P9YY6o0l";   // 예:
         }
       } else probs = localRound(level);
       if(!playing) return;
-      busy = false; paint(); t0 = performance.now(); tick();
+      busy = false; paint(); fx.go(); t0 = performance.now(); tick();
     };
     setTimeout(step, 800);
   }
@@ -572,20 +667,24 @@ const SUPABASE_KEY = "sb_publishable_5IK46ha7sJofNA0KcAMfvg_P9YY6o0l";   // 예:
   function press(k){
     if(!playing || busy) return;
     const ansEl = $("ans");
+    const before = input;
     if(k==="C") input="";
     else if(k==="←") input = input.slice(0,-1);
     else if(/^\d$/.test(k) && input.length < 4) input += k;
+    if(input === before) return;                // 바뀐 게 없으면 무시 (4자리 초과, 빈 칸에서 지우기 등)
     ansEl.className = "ans"; paint();
     const target = String(solve(probs[idx]));
+    if(input.length < target.length) fx.key();     // 정답 판정 전 입력: 딸깍 소리 + 짧은 진동
     if(input.length >= target.length){
       if(input === target){
         ansEl.className = "ans ok"; busy = true; given.push(Number(input));
+        if(idx + 1 >= probs.length) fx.done(); else fx.ok();
         setTimeout(()=>{
           idx++; input=""; ansEl.className="ans"; busy=false;
           if(idx >= probs.length) finish(); else { $("hint").textContent=""; paint(); }
         }, 120);
       } else {
-        wrong++; busy = true;
+        wrong++; busy = true; fx.bad();
         ansEl.className = "ans bad"; $("hint").textContent = "앗, 다시 생각해 봐요!";
         setTimeout(()=>{ input=""; ansEl.className="ans"; busy=false; paint(); }, 350);
       }
@@ -621,6 +720,7 @@ const SUPABASE_KEY = "sb_publishable_5IK46ha7sJofNA0KcAMfvg_P9YY6o0l";   // 예:
   }
 
   document.addEventListener("keydown", e=>{
+    if(!$("settings").classList.contains("hidden")){ if(e.key==="Escape") $("settings").classList.add("hidden"); return; }
     if($("play").classList.contains("hidden")) return;
     if(/^\d$/.test(e.key)){ press(e.key); e.preventDefault(); }
     else if(e.key==="Backspace"){ press("←"); e.preventDefault(); }
