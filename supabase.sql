@@ -41,11 +41,29 @@ insert into public.banned_words(word) values
   ('fuck'),('shit'),('bitch'),('sex'),('porn'),('admin'),('관리자'),('운영자')
 on conflict do nothing;
 
+-- 숨김(차단) 목록: 여기 있는 코드는 다른 사람 랭킹에 안 보여요. 본인 화면에는 그대로 보여서 숨겨진 걸 모릅니다.
+--   · 서버 기준보다 빠른 기록(봇이 기준을 찔러보는 것)을 내면 자동으로 들어가요 (reason = 'too_fast')
+--   · Table Editor에서 직접 코드(예: HXW2QWM2, 하이픈 없이)를 추가하면 수동 차단, 행을 지우면 해제예요.
+create table if not exists public.banned_players (
+  player_key  text primary key,
+  reason      text not null default 'manual',
+  note        text,
+  created_at  timestamptz not null default now()
+);
+
 -- 테이블은 외부에서 직접 읽기/쓰기 금지. 아래 함수(RPC)로만 접근합니다.
 alter table public.rounds       enable row level security;
 alter table public.players      enable row level security;
 alter table public.banned_words enable row level security;
-revoke all on public.rounds, public.players, public.banned_words from anon, authenticated;
+alter table public.banned_players enable row level security;
+revoke all on public.rounds, public.players, public.banned_words, public.banned_players from anon, authenticated;
+
+-- 지금까지 기록 중 '너무 빨라서 무효'가 있었던 코드는 숨김 목록에 넣기 (다시 실행해도 안전)
+insert into public.banned_players(player_key, reason, note)
+select distinct player_key, 'too_fast', '기존 기록에서 발견'
+  from public.rounds
+ where status = 'invalid' and duration_ms < coalesce(array_length(answers,1), 20) * 350
+on conflict do nothing;
 
 -- 2) 도우미 함수 -------------------------------------------
 create or replace function public.bm_week() returns text
@@ -258,6 +276,12 @@ begin
   end if;
   if v_ms < array_length(r.answers,1) * 350 or v_ms > 30*60*1000 then
     update rounds set status='invalid', finished_at=now(), duration_ms=v_ms where id = r.id;
+    -- 사람이 낼 수 없는 속도 → 봇으로 보고 숨김 목록에 추가
+    if v_ms < array_length(r.answers,1) * 350 then
+      insert into banned_players(player_key, reason, note)
+      values (r.player_key, 'too_fast', r.level || ' ' || v_ms || 'ms')
+      on conflict do nothing;
+    end if;
     return jsonb_build_object('status','invalid','reason','time', 'duration_ms', v_ms);
   end if;
 
@@ -268,9 +292,12 @@ begin
          wrong_count = greatest(0, least(coalesce(p_wrong,0), 999))
    where id = r.id;
 
+  -- 순위는 숨김 목록을 뺀 사람들 + 나 자신 기준 (숨겨진 사람은 자기가 숨겨진 걸 모르게)
   with best as (
     select player_key, min(duration_ms) ms from rounds
      where week_id = r.week_id and level = r.level and status = 'done'
+       and (player_key = r.player_key
+            or not exists (select 1 from banned_players b where b.player_key = rounds.player_key))
      group by player_key)
   select count(*) filter (where ms < least(v_ms, coalesce(v_prev, v_ms))) + 1, count(*)
     into v_rank, v_total from best;
@@ -288,6 +315,8 @@ language sql stable security definer set search_path = public as $$
     select distinct on (player_key) player_key, nick, duration_ms, wrong_count, finished_at
       from rounds
      where week_id = bm_week() and level = p_level and status = 'done'
+       and (player_key = p_player
+            or not exists (select 1 from banned_players b where b.player_key = rounds.player_key))
      order by player_key, duration_ms, finished_at
   ), ranked as (
     select row_number() over (order by duration_ms, finished_at) rk,
